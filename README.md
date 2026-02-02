@@ -1,13 +1,19 @@
 # RFC-2217 NAT Proxy
 
-TCP-прокси для эмуляции COM-порта по протоколу RFC-2217 через сеть, предназначенный для IoT-устройств за NAT.
+TCP proxy for COM port emulation over RFC-2217 protocol, designed for IoT devices behind NAT.
 
-## Архитектура
+**[Документация на русском языке](README_RU.md)**
+
+## License
+
+MIT License - see [LICENSE](LICENSE) for details. Attribution required when using this project.
+
+## Architecture
 
 ```
 ┌─────────────┐         ┌───────────────────────┐         ┌─────────────┐
-│ IoT-устр-во │────────▶│    RFC-2217 Proxy     │◀────────│   Клиент    │
-│ (за NAT)    │  :2217  │                       │  :2217  │ (ПК/Сервер) │
+│ IoT Device  │────────▶│    RFC-2217 Proxy     │◀────────│   Client    │
+│ (behind NAT)│  :2217  │                       │  :2217  │ (PC/Server) │
 │ ESP8266/32  │         │  ┌─────────────────┐  │         │             │
 └─────────────┘         │  │ Device Registry │  │         └─────────────┘
                         │  │ Session Manager │  │
@@ -16,120 +22,120 @@ TCP-прокси для эмуляции COM-порта по протоколу 
                         └───────────────────────┘
 ```
 
-## Порты
+## Ports
 
-| Порт | Назначение |
-|------|------------|
-| 2217 | Подключения устройств и клиентов (единый порт) |
-| 8080 | HTTP API и health-проверки |
+| Port | Purpose |
+|------|---------|
+| 2217 | Device and client connections (unified port) |
+| 8080 | HTTP API and health checks |
 
-## Быстрый старт
+## Quick Start
 
 ```bash
-# Сборка и запуск локально
+# Build and run locally
 make run
 
-# Или через Docker
+# Or using Docker
 make docker-build
 docker run -p 2217:2217 -p 8080:8080 registry.jad.ru/proxy-rfc2217:latest
 ```
 
-## Конфигурация
+## Configuration
 
-Переменные окружения:
+Environment variables:
 
-| Переменная | По умолчанию | Описание |
-|------------|--------------|----------|
-| `PORT` | 2217 | Порт для подключений (устройства и клиенты) |
-| `API_PORT` | 8080 | Порт для HTTP API и веб-интерфейса |
-| `AUTH_TOKEN` | (пусто) | Токен аутентификации устройств |
-| `WEB_USER` | admin | Логин для веб-интерфейса (Basic Auth) |
-| `WEB_PASS` | admin | Пароль для веб-интерфейса (Basic Auth) |
-| `KEEPALIVE` | 30 | TCP keepalive интервал в секундах |
-| `INIT_TIMEOUT` | 5 | Таймаут ожидания AT-команды при подключении в секундах |
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `PORT` | 2217 | Port for connections (devices and clients) |
+| `API_PORT` | 8080 | Port for HTTP API and web interface |
+| `AUTH_TOKEN` | (empty) | Device authentication token |
+| `WEB_USER` | admin | Web interface login (Basic Auth) |
+| `WEB_PASS` | admin | Web interface password (Basic Auth) |
+| `KEEPALIVE` | 30 | TCP keepalive interval in seconds |
+| `INIT_TIMEOUT` | 5 | Timeout for AT command on connection in seconds |
 
-## Протокол
+## Protocol
 
-Используются AT-команды. Устройства и клиенты подключаются к одному порту, различаются по первой AT-команде.
+AT commands are used. Devices and clients connect to the same port and are distinguished by their first AT command.
 
-### Регистрация устройства
+### Device Registration
 
-Устройство подключается к порту и отправляет AT-команду регистрации:
+A device connects to the port and sends a registration AT command:
 
 ```
 AT+REG=<token>\r\n
 ```
 
-Формат `<token>` зависит от настройки `AUTH_TOKEN`:
+The `<token>` format depends on the `AUTH_TOKEN` setting:
 
-- **Без авторизации** (`AUTH_TOKEN` не задан): `<token>` = DEVICE_ID
+- **Without authentication** (`AUTH_TOKEN` not set): `<token>` = DEVICE_ID
   ```
   AT+REG=DEVICE_001\r\n
   ```
 
-- **С авторизацией** (`AUTH_TOKEN` задан): `<token>` = `AUTH_TOKEN+DEVICE_ID`
+- **With authentication** (`AUTH_TOKEN` set): `<token>` = `AUTH_TOKEN+DEVICE_ID`
   ```
   AT+REG=secret123+DEVICE_001\r\n
   ```
 
-**Ответ:**
+**Response:**
 ```
 OK\r\n
 ```
 
-или при ошибке:
+or on error:
 ```
 ERROR\r\n
 ```
 
-После регистрации соединение поддерживается через TCP keepalive (не требует дополнительных команд от устройства).
+After registration, the connection is maintained via TCP keepalive (no additional commands required from the device).
 
-### Подключение клиента
+### Client Connection
 
-Клиент подключается к тому же порту и отправляет:
+A client connects to the same port and sends:
 
 ```
 AT+CONNECT=<token>\r\n
 ```
 
-Формат `<token>` аналогичен регистрации устройства:
+The `<token>` format is the same as for device registration:
 
-- **Без авторизации** (`AUTH_TOKEN` не задан): `<token>` = DEVICE_ID
+- **Without authentication** (`AUTH_TOKEN` not set): `<token>` = DEVICE_ID
   ```
   AT+CONNECT=DEVICE_001\r\n
   ```
 
-- **С авторизацией** (`AUTH_TOKEN` задан): `<token>` = `AUTH_TOKEN+DEVICE_ID`
+- **With authentication** (`AUTH_TOKEN` set): `<token>` = `AUTH_TOKEN+DEVICE_ID`
   ```
   AT+CONNECT=secret123+DEVICE_001\r\n
   ```
 
-**Ответ:**
+**Response:**
 ```
 OK\r\n
 ```
 
-или при ошибке:
+or on error:
 ```
 ERROR\r\n
 ```
 
-После получения `OK` соединение переходит в режим прозрачной передачи данных (RFC-2217 bridge).
+After receiving `OK`, the connection enters transparent data transfer mode (RFC-2217 bridge).
 
 ## HTTP API
 
 ```
-GET /                  # Веб-интерфейс (Basic Auth)
-GET /healthz           # Проверка liveness
-GET /readyz            # Проверка readiness
-GET /api/v1/devices    # Список подключённых устройств
-GET /api/v1/sessions   # Список активных сессий
-GET /api/v1/stats      # Статистика
+GET /                  # Web interface (Basic Auth)
+GET /healthz           # Liveness probe
+GET /readyz            # Readiness probe
+GET /api/v1/devices    # List connected devices
+GET /api/v1/sessions   # List active sessions
+GET /api/v1/stats      # Statistics
 ```
 
-Веб-интерфейс доступен по адресу `http://localhost:8080/` и защищён Basic Auth (по умолчанию admin:admin).
+The web interface is available at `http://localhost:8080/` and is protected by Basic Auth (default admin:admin).
 
-### Примеры ответов
+### Response Examples
 
 **GET /api/v1/devices:**
 ```json
@@ -165,50 +171,50 @@ GET /api/v1/stats      # Статистика
 }
 ```
 
-## Тестирование
+## Testing
 
-### Эмуляция устройства (через netcat)
+### Device Emulation (using netcat)
 
 ```bash
-# Подключение к прокси как устройство
+# Connect to proxy as a device
 nc localhost 2217
 
-# Без AUTH_TOKEN:
+# Without AUTH_TOKEN:
 AT+REG=DEVICE_001
-# Ответ: OK
+# Response: OK
 
-# С AUTH_TOKEN=secret:
+# With AUTH_TOKEN=secret:
 AT+REG=secret+DEVICE_001
-# Ответ: OK
+# Response: OK
 
-# Соединение остаётся открытым (TCP keepalive)
+# Connection remains open (TCP keepalive)
 ```
 
-### Подключение клиента
+### Client Connection
 
 ```bash
-# Подключение как клиент
+# Connect as a client
 nc localhost 2217
 
-# Без AUTH_TOKEN:
+# Without AUTH_TOKEN:
 AT+CONNECT=DEVICE_001
-# Ответ: OK
+# Response: OK
 
-# С AUTH_TOKEN=secret:
+# With AUTH_TOKEN=secret:
 AT+CONNECT=secret+DEVICE_001
-# Ответ: OK (и далее прозрачный канал к устройству)
+# Response: OK (then transparent channel to device)
 ```
 
-### Тестовый скрипт устройства
+### Device Test Script
 
 ```bash
 #!/bin/bash
-# test_device.sh - Простой эмулятор устройства
+# test_device.sh - Simple device emulator
 
 HOST=${1:-localhost}
 PORT=${2:-2217}
 DEVICE_ID=${3:-DEVICE_001}
-AUTH_TOKEN=${4:-}  # Опционально
+AUTH_TOKEN=${4:-}  # Optional
 
 if [ -n "$AUTH_TOKEN" ]; then
   TOKEN="${AUTH_TOKEN}+${DEVICE_ID}"
@@ -218,20 +224,20 @@ fi
 
 {
   echo -e "AT+REG=${TOKEN}\r"
-  cat  # Держим соединение открытым
+  cat  # Keep connection open
 } | nc $HOST $PORT
 ```
 
-### Тестовый скрипт клиента
+### Client Test Script
 
 ```bash
 #!/bin/bash
-# test_client.sh - Тестовый клиент
+# test_client.sh - Test client
 
 HOST=${1:-localhost}
 PORT=${2:-2217}
 DEVICE_ID=${3:-DEVICE_001}
-AUTH_TOKEN=${4:-}  # Опционально
+AUTH_TOKEN=${4:-}  # Optional
 
 if [ -n "$AUTH_TOKEN" ]; then
   TOKEN="${AUTH_TOKEN}+${DEVICE_ID}"
@@ -241,11 +247,11 @@ fi
 
 {
   echo -e "AT+CONNECT=${TOKEN}\r"
-  cat  # Прозрачная передача stdin
+  cat  # Transparent stdin transfer
 } | nc $HOST $PORT
 ```
 
-## Развёртывание в Kubernetes
+## Kubernetes Deployment
 
 ```bash
 kubectl apply -f k8s/namespace.yaml
@@ -253,33 +259,33 @@ kubectl apply -f k8s/service.yaml
 kubectl apply -f k8s/deployment.yaml
 ```
 
-### Создание секретов
+### Creating Secrets
 
 ```bash
-# Генерация случайных токенов
+# Generate random tokens
 AUTH_TOKEN=$(openssl rand -hex 16)
 WEB_PASS=$(openssl rand -hex 16)
 
-# Создание секрета
+# Create secret
 kubectl -n waterius create secret generic proxy-rfc2217-secrets \
   --from-literal=auth-token=$AUTH_TOKEN \
   --from-literal=web-user=admin \
   --from-literal=web-pass=$WEB_PASS \
   --dry-run=client -o yaml | kubectl apply -f -
 
-# Посмотреть сгенерированные значения
+# View generated values
 echo "AUTH_TOKEN: $AUTH_TOKEN"
 echo "WEB_PASS: $WEB_PASS"
 ```
 
-## Сборка
+## Building
 
 ```bash
-make build          # Сборка для Linux amd64
-make build-local    # Сборка для текущей платформы
-make docker-build   # Сборка Docker-образа
-make docker-push    # Отправка в registry
-make release        # Полный цикл
-make test           # Запуск тестов
-make lint           # Форматирование и проверка
+make build          # Build for Linux amd64
+make build-local    # Build for current platform
+make docker-build   # Build Docker image
+make docker-push    # Push to registry
+make release        # Full pipeline
+make test           # Run tests
+make lint           # Format and check
 ```
