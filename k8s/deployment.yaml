@@ -1,0 +1,78 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: proxy-rfc2217
+  namespace: waterius
+  labels:
+    app: proxy-rfc2217
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: proxy-rfc2217
+  template:
+    metadata:
+      labels:
+        app: proxy-rfc2217
+    spec:
+      imagePullSecrets:
+        - name: regcred
+      containers:
+        - name: proxy-rfc2217
+          image: registry.jad.ru/proxy-rfc2217:latest
+          imagePullPolicy: Always
+          ports:
+            - name: tcp
+              containerPort: 2217
+              protocol: TCP
+            - name: api
+              containerPort: 8080
+              protocol: TCP
+          env:
+            - name: PORT
+              value: "2217"
+            - name: API_PORT
+              value: "8080"
+            - name: KEEPALIVE
+              value: "30"
+            - name: AUTH_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: proxy-rfc2217-secrets
+                  key: auth-token
+                  optional: true
+            - name: WEB_USER
+              valueFrom:
+                secretKeyRef:
+                  name: proxy-rfc2217-secrets
+                  key: web-user
+                  optional: true
+            - name: WEB_PASS
+              valueFrom:
+                secretKeyRef:
+                  name: proxy-rfc2217-secrets
+                  key: web-pass
+                  optional: true
+            - name: DEBUG
+              value: "false"
+            - name: PROXY_PROTOCOL
+              value: "false"  # true для nginx-ingress, false для MetalLB L2  
+          livenessProbe:
+            httpGet:
+              path: /healthz
+              port: api
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          readinessProbe:
+            httpGet:
+              path: /readyz
+              port: api
+            initialDelaySeconds: 5
+            periodSeconds: 5
+          resources:
+            requests:
+              cpu: 50m
+              memory: 64Mi
+            limits:
+              cpu: 200m
+              memory: 128Mi

@@ -1,0 +1,98 @@
+{
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "Run",
+      "type": "shell",
+      "command": "make run",
+      "group": {
+        "kind": "build",
+        "isDefault": true
+      },
+      "problemMatcher": ["$go"],
+      "presentation": {
+        "reveal": "always",
+        "panel": "new"
+      }
+    },
+    {
+      "label": "Build (Linux)",
+      "type": "shell",
+      "command": "make build",
+      "group": "build",
+      "problemMatcher": ["$go"]
+    },
+    {
+      "label": "Build (Local)",
+      "type": "shell",
+      "command": "make build-local",
+      "group": "build",
+      "problemMatcher": ["$go"]
+    },
+    {
+      "label": "Test",
+      "type": "shell",
+      "command": "make test",
+      "group": "test",
+      "problemMatcher": ["$go"]
+    },
+    {
+      "label": "Lint",
+      "type": "shell",
+      "command": "make lint",
+      "group": "build",
+      "problemMatcher": ["$go"]
+    },
+    {
+      "label": "Format",
+      "type": "shell",
+      "command": "make fmt",
+      "group": "build",
+      "problemMatcher": []
+    },
+    {
+      "label": "Vet",
+      "type": "shell",
+      "command": "make vet",
+      "group": "build",
+      "problemMatcher": ["$go"]
+    },
+    {
+      "label": "Clean",
+      "type": "shell",
+      "command": "make clean",
+      "problemMatcher": []
+    },
+    {
+      "label": "Docker Build",
+      "type": "shell",
+      "command": "make docker-build",
+      "group": "build",
+      "problemMatcher": []
+    },
+    {
+      "label": "Docker Push",
+      "type": "shell",
+      "command": "make docker-push",
+      "problemMatcher": []
+    },
+    {
+      "label": "Release",
+      "type": "shell",
+      "command": "make release",
+      "problemMatcher": []
+    },
+    {
+      "label": "Deploy",
+      "type": "shell",
+      "command": "make deploy",
+      "problemMatcher": []
+    },
+    {
+      "label": "Release & Deploy",
+      "type": "shell",
+      "command": "make release-deploy",
+      "problemMatcher": []
+    }
+  ]
+}

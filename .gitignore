@@ -1,0 +1,11 @@
+# Secrets - do not commit real values
+# k8s/secrets.yml
+# k8s/proxy-rfc2217-secrets.yaml
+
+# Binary
+proxy-rfc2217
+
+# IDE
+.idea/
+*.swp
+*.swo
