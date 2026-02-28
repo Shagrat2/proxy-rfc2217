@@ -128,6 +128,25 @@ Hardware (ESP8266/ESP32, MAX485, UART)
 - `platformio.ini` - Firmware build configuration
 - `secrets.ini.template` - Template for credentials (copy to `secrets.ini`)
 
+## Connection Protocol Compatibility
+
+Порт 2217 принимает подключения от **разного оборудования и ПО**. Каждое изменение в парсере AT-команд или обработчике соединений **обязательно проверять** на совместимость со всеми существующими типами клиентов:
+
+| Тип клиента | Первая команда | Presets до AT | Ответ на успех |
+|---|---|---|---|
+| Устройство (ESP) | `AT+REG=<token>` | — | `OK\r\n` |
+| Клиент RFC-2217 | `AT+CONNECT=<token>` | RFC-2217 (IAC SB) | `OK\r\n` |
+| Клиент USR-VCOM | `AT+CONNECT=<token>` | USR-VCOM (55 AA 55) | `OK\r\n` |
+| Клиент GSM-CSD (модем) | `ATZ`, `ATV0`, `ATE0`, затем `ATD<token>` | `+++` без CR/LF | `CONNECT 9600` / `0\r` / `1\r` |
+| Устройство с ATDT | `ATDT` (без параметра), затем `AT+REG=<token>` | — | `OK\r\n` |
+
+**Правила при внесении изменений:**
+- Перед изменением парсера/обработчика — проверить ВСЕ типы клиентов выше
+- Если поведение зависит от типа оборудования — разделять через состояние (например `ModemState`)
+- Модемная эмуляция (ATD как dial) активируется **только** после получения generic AT-команды (ATZ/ATE0/ATV0)
+- Без предшествующей модемной команды ATDT с параметром работает по-старому (OK + ожидание)
+- Изменения в `readLineWithSkipped` / `ReadATCommandWithPresets` затрагивают **все** типы клиентов
+
 ## Debugging
 
 VSCode configurations available in `.vscode/` directories:
