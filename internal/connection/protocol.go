@@ -45,16 +45,15 @@ func ReadATCommandWithPresets(reader *bufio.Reader, conn net.Conn, timeout time.
 		}
 
 		// Set read deadline for this iteration
-		// Use a short per-line deadline (1s) to quickly detect data without CR/LF
-		// (e.g., +++ escape sequence). The overall timeout is enforced above.
-		lineDeadline := 1 * time.Second
+		// When timeout>0: use a short per-line deadline (1s) to quickly detect
+		// data without CR/LF (e.g., +++ escape sequence). Overall timeout enforced above.
+		// When timeout=0: don't set any deadline — caller manages the deadline.
 		if timeout > 0 {
+			lineDeadline := 1 * time.Second
 			remaining := timeout - time.Since(startTime)
 			if remaining < lineDeadline {
 				lineDeadline = remaining
 			}
-		}
-		if lineDeadline > 0 {
 			conn.SetReadDeadline(time.Now().Add(lineDeadline))
 		}
 

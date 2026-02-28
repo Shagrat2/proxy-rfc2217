@@ -33,6 +33,19 @@
 - Данные без CR/LF (например `+++` escape sequence модема) теперь обрабатываются за 1с, а не вызывают ERROR по таймауту
 - Общий таймаут ожидания AT-команды (InitTimeout / PostConnectTimeout) сохранён — проверяется в цикле
 
+### Fixed — совместимость ReadATCommand (timeout=0)
+
+**Изменён:** `internal/connection/protocol.go`
+- Per-line deadline (1с) теперь применяется **только** при timeout>0
+- `ReadATCommand()` (timeout=0) больше не перезаписывает deadline, установленный вызывающим кодом
+- Исправлена регрессия: `handleDevice()` ожидание ATDT после регистрации снова использует 60с deadline
+
+### Fixed — modem-формат ошибок в handleClient
+
+**Изменён:** `internal/connection/handler.go`
+- Ранние ошибки в `handleClient()` (пустой токен, неверный формат, неверный auth token) теперь используют `NO CARRIER` в modem-режиме вместо plain `ERROR`
+- Добавлена вспомогательная функция `writeError()` для единообразной отправки ошибок
+
 ### Обратная совместимость
 
 - `AT+REG=<token>` — без изменений

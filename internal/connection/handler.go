@@ -294,10 +294,19 @@ func (h *Handler) deviceKeepalive(conn net.Conn, deviceID string, stop <-chan st
 // Supports both USR-VCOM and RFC2217 presets before AT command
 // modem is non-nil when connection comes from GSM modem emulation (ATD<number>)
 func (h *Handler) handleClient(_ context.Context, conn net.Conn, reader *bufio.Reader, atCmd *ATCommand, remoteAddr string, modem *ModemState) {
+	// writeError sends error in appropriate format (modem or plain)
+	writeError := func() {
+		if modem != nil {
+			modem.WriteModemNoCarrier(conn)
+		} else {
+			WriteError(conn)
+		}
+	}
+
 	token := atCmd.Param
 	if token == "" {
 		log.Printf("[client] %s: empty token", remoteAddr)
-		WriteError(conn)
+		writeError()
 		return
 	}
 
@@ -309,12 +318,12 @@ func (h *Handler) handleClient(_ context.Context, conn net.Conn, reader *bufio.R
 		parts := strings.SplitN(token, "+", 2)
 		if len(parts) != 2 {
 			log.Printf("[client] %s: invalid token format (expected TOKEN+DEVICE_ID)", remoteAddr)
-			WriteError(conn)
+			writeError()
 			return
 		}
 		if parts[0] != h.cfg.AuthToken {
 			log.Printf("[client] %s: invalid auth token", remoteAddr)
-			WriteError(conn)
+			writeError()
 			return
 		}
 		deviceID = parts[1]
@@ -325,7 +334,7 @@ func (h *Handler) handleClient(_ context.Context, conn net.Conn, reader *bufio.R
 
 	if deviceID == "" {
 		log.Printf("[client] %s: empty DEVICE_ID", remoteAddr)
-		WriteError(conn)
+		writeError()
 		return
 	}
 
