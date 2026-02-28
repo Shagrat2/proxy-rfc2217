@@ -40,8 +40,9 @@ func (h *Handler) Handle(ctx context.Context, conn net.Conn) {
 
 	reader := bufio.NewReader(conn)
 
-	// Track USR-VCOM config across command loop
+	// Track USR-VCOM config and modem state across command loop
 	var usrvcomCfg *USRVCOMConfig
+	var modem *ModemState
 	timeout := h.cfg.InitTimeout // Start with init timeout
 
 	for {
@@ -79,12 +80,25 @@ func (h *Handler) Handle(ctx context.Context, conn net.Conn) {
 
 		switch cmd.Cmd {
 		case CmdDT, CmdDP:
-			// ATDT/ATDP - respond OK and wait for next command (AT+REG or AT+CONNECT)
-			if err := WriteOK(conn); err != nil {
-				log.Printf("[conn] %s: write OK: %v", remoteAddr, err)
+			if cmd.Param != "" && modem != nil {
+				// ATD<number> in modem mode — GSM dial, treat as client connection
+				log.Printf("[conn] %s: modem dial: %s%s", remoteAddr, cmd.Cmd, cmd.Param)
+				cmd.Cmd = CmdConnect
+				if usrvcomCfg != nil && cmd.USRVCOMCfg == nil {
+					cmd.USRVCOMCfg = usrvcomCfg
+				}
+				h.handleClient(ctx, conn, reader, cmd, remoteAddr, modem)
 				return
 			}
-			// Switch to post-connect timeout (longer) for next command
+			// ATDT/ATDP without modem mode or without number — original behavior: OK and wait
+			if modem != nil {
+				modem.WriteModemOK(conn)
+			} else {
+				if err := WriteOK(conn); err != nil {
+					log.Printf("[conn] %s: write OK: %v", remoteAddr, err)
+					return
+				}
+			}
 			timeout = h.cfg.PostConnectTimeout
 			continue
 		case CmdReg:
@@ -95,8 +109,18 @@ func (h *Handler) Handle(ctx context.Context, conn net.Conn) {
 			if usrvcomCfg != nil && cmd.USRVCOMCfg == nil {
 				cmd.USRVCOMCfg = usrvcomCfg
 			}
-			h.handleClient(ctx, conn, reader, cmd, remoteAddr)
+			h.handleClient(ctx, conn, reader, cmd, remoteAddr, nil)
 			return
+		case CmdModem:
+			// Generic modem AT command — activate modem emulation
+			if modem == nil {
+				modem = NewModemState()
+				log.Printf("[conn] %s: modem emulation activated", remoteAddr)
+			}
+			log.Printf("[modem] %s: %s", remoteAddr, cmd.Param)
+			modem.HandleCommand(conn, cmd.Param)
+			timeout = h.cfg.PostConnectTimeout
+			continue
 		default:
 			log.Printf("[conn] %s: unexpected command: %s", remoteAddr, cmd.Cmd)
 			WriteError(conn)
@@ -268,7 +292,8 @@ func (h *Handler) deviceKeepalive(conn net.Conn, deviceID string, stop <-chan st
 
 // handleClient handles client connection request
 // Supports both USR-VCOM and RFC2217 presets before AT command
-func (h *Handler) handleClient(_ context.Context, conn net.Conn, reader *bufio.Reader, atCmd *ATCommand, remoteAddr string) {
+// modem is non-nil when connection comes from GSM modem emulation (ATD<number>)
+func (h *Handler) handleClient(_ context.Context, conn net.Conn, reader *bufio.Reader, atCmd *ATCommand, remoteAddr string, modem *ModemState) {
 	token := atCmd.Param
 	if token == "" {
 		log.Printf("[client] %s: empty token", remoteAddr)
@@ -368,14 +393,22 @@ func (h *Handler) handleClient(_ context.Context, conn net.Conn, reader *bufio.R
 	dev, ok := h.registry.Get(deviceID)
 	if !ok {
 		log.Printf("[client] %s: device %s not found", remoteAddr, deviceID)
-		WriteError(conn)
+		if modem != nil {
+			modem.WriteModemNoCarrier(conn)
+		} else {
+			WriteError(conn)
+		}
 		return
 	}
 
 	// Check if device is already in a session
 	if dev.IsInSession() {
 		log.Printf("[client] %s: device %s is busy", remoteAddr, deviceID)
-		WriteError(conn)
+		if modem != nil {
+			modem.WriteModemNoCarrier(conn)
+		} else {
+			WriteError(conn)
+		}
 		return
 	}
 
@@ -385,10 +418,16 @@ func (h *Handler) handleClient(_ context.Context, conn net.Conn, reader *bufio.R
 
 	log.Printf("[client] %s: created session %s with device %s", remoteAddr, sess.ID, deviceID)
 
-	// Clear deadline and send OK to client
+	// Clear deadline and send connect response to client
 	conn.SetReadDeadline(time.Time{})
-	if err := WriteOK(conn); err != nil {
-		log.Printf("[client] %s: write OK error: %v", remoteAddr, err)
+	var connectErr error
+	if modem != nil {
+		connectErr = modem.WriteModemConnect(conn)
+	} else {
+		connectErr = WriteOK(conn)
+	}
+	if connectErr != nil {
+		log.Printf("[client] %s: write connect response error: %v", remoteAddr, connectErr)
 		h.sessions.End(sess.ID)
 		dev.ClearSession()
 		return
@@ -462,6 +501,11 @@ func (h *Handler) handleClient(_ context.Context, conn net.Conn, reader *bufio.R
 	// Clean up
 	h.sessions.End(sess.ID)
 	dev.ClearSession()
+
+	// Send NO CARRIER for modem connections
+	if modem != nil {
+		modem.WriteModemNoCarrier(conn)
+	}
 
 	log.Printf("[client] %s: session %s ended", remoteAddr, sess.ID)
 }

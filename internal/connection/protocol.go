@@ -16,6 +16,7 @@ const (
 	CmdConnect = "AT+CONNECT" // Client connection: AT+CONNECT=<token>
 	CmdDT      = "ATDT"       // Dial tone (optional after registration), may have phone number
 	CmdDP      = "ATDP"       // Dial pulse (optional after registration), may have phone number
+	CmdModem   = "MODEM"      // Generic modem AT command (ATZ, ATE0, ATV0, etc.)
 
 	RespOK    = "OK\r\n"
 	RespError = "ERROR\r\n"
@@ -160,17 +161,27 @@ func readLineWithSkipped(reader *bufio.Reader) (line []byte, skipped []byte, err
 
 // parseATCommand parses AT command string and returns ATCommand or nil
 func parseATCommand(cmdLine string) *ATCommand {
+	upper := strings.ToUpper(cmdLine)
+
 	if strings.HasPrefix(cmdLine, CmdReg+"=") {
-		return &ATCommand{Cmd: CmdReg, Param: strings.TrimPrefix(cmdLine, CmdReg+"=")}
+		return &ATCommand{Cmd: CmdReg, Param: cmdLine[len(CmdReg)+1:]}
 	}
 	if strings.HasPrefix(cmdLine, CmdConnect+"=") {
-		return &ATCommand{Cmd: CmdConnect, Param: strings.TrimPrefix(cmdLine, CmdConnect+"=")}
+		return &ATCommand{Cmd: CmdConnect, Param: cmdLine[len(CmdConnect)+1:]}
 	}
-	if strings.HasPrefix(cmdLine, CmdDT) {
-		return &ATCommand{Cmd: CmdDT, Param: strings.TrimPrefix(cmdLine, CmdDT)}
+	if strings.HasPrefix(upper, "ATDT") {
+		return &ATCommand{Cmd: CmdDT, Param: cmdLine[4:]}
 	}
-	if strings.HasPrefix(cmdLine, CmdDP) {
-		return &ATCommand{Cmd: CmdDP, Param: strings.TrimPrefix(cmdLine, CmdDP)}
+	if strings.HasPrefix(upper, "ATDP") {
+		return &ATCommand{Cmd: CmdDP, Param: cmdLine[4:]}
+	}
+	// ATD<number> without T/P suffix
+	if strings.HasPrefix(upper, "ATD") && len(cmdLine) > 3 {
+		return &ATCommand{Cmd: CmdDT, Param: cmdLine[3:]}
+	}
+	// Generic modem AT command (ATZ, ATE0, ATV0, AT+CSQ, etc.)
+	if strings.HasPrefix(upper, "AT") {
+		return &ATCommand{Cmd: CmdModem, Param: cmdLine}
 	}
 	return nil
 }
