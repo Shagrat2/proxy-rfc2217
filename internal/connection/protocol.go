@@ -62,8 +62,17 @@ func ReadATCommandWithPresets(reader *bufio.Reader, conn net.Conn, timeout time.
 		if err != nil {
 			if netErr, ok := err.(net.Error); ok && netErr.Timeout() {
 				// Timeout with skipped bytes but no line — data without CR/LF
-				// (e.g., +++ escape sequence). Process skipped bytes and continue.
+				// (e.g., +++ escape sequence or USR-VCOM). Process and continue.
 				if len(skipped) > 0 && len(line) == 0 {
+					if IsUSRVCOM(skipped) {
+						cfg := ParseUSRVCOM(skipped)
+						if cfg != nil && cfg.Valid {
+							cfg.LogConfig("received")
+							usrvcomCfg = cfg
+							log.Printf("[protocol] USR-VCOM accepted, waiting for AT command...")
+							continue
+						}
+					}
 					log.Printf("[protocol] data without CR/LF (%d bytes): %s",
 						len(skipped), hex.EncodeToString(skipped))
 					allSkipped = append(allSkipped, skipped...)
