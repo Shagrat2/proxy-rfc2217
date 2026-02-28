@@ -26,6 +26,13 @@
 - Завершение сессии → `NO CARRIER`
 - Сигнатура `handleClient()` расширена параметром `modem *ModemState`
 
+### Fixed — обработка +++ escape sequence
+
+**Изменён:** `internal/connection/protocol.go`
+- `ReadATCommandWithPresets()`: вместо полного таймаута (60с) для каждого чтения строки используется короткий per-line deadline (1с)
+- Данные без CR/LF (например `+++` escape sequence модема) теперь обрабатываются за 1с, а не вызывают ERROR по таймауту
+- Общий таймаут ожидания AT-команды (InitTimeout / PostConnectTimeout) сохранён — проверяется в цикле
+
 ### Обратная совместимость
 
 - `AT+REG=<token>` — без изменений

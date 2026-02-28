@@ -45,19 +45,37 @@ func ReadATCommandWithPresets(reader *bufio.Reader, conn net.Conn, timeout time.
 		}
 
 		// Set read deadline for this iteration
+		// Use a short per-line deadline (1s) to quickly detect data without CR/LF
+		// (e.g., +++ escape sequence). The overall timeout is enforced above.
+		lineDeadline := 1 * time.Second
 		if timeout > 0 {
 			remaining := timeout - time.Since(startTime)
-			if remaining > 0 {
-				conn.SetReadDeadline(time.Now().Add(remaining))
+			if remaining < lineDeadline {
+				lineDeadline = remaining
 			}
+		}
+		if lineDeadline > 0 {
+			conn.SetReadDeadline(time.Now().Add(lineDeadline))
 		}
 
 		line, skipped, err := readLineWithSkipped(reader)
 		if err != nil {
-			// If we have USR-VCOM config and got timeout, keep waiting
-			if usrvcomCfg != nil {
-				if netErr, ok := err.(net.Error); ok && netErr.Timeout() {
+			if netErr, ok := err.(net.Error); ok && netErr.Timeout() {
+				// Timeout with skipped bytes but no line — data without CR/LF
+				// (e.g., +++ escape sequence). Process skipped bytes and continue.
+				if len(skipped) > 0 && len(line) == 0 {
+					log.Printf("[protocol] data without CR/LF (%d bytes): %s",
+						len(skipped), hex.EncodeToString(skipped))
+					allSkipped = append(allSkipped, skipped...)
+					continue
+				}
+				// USR-VCOM timeout — keep waiting
+				if usrvcomCfg != nil {
 					log.Printf("[protocol] timeout after USR-VCOM, continuing...")
+					continue
+				}
+				// No data at all within lineDeadline — check overall timeout
+				if timeout > 0 && time.Since(startTime) < timeout {
 					continue
 				}
 			}
