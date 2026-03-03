@@ -85,9 +85,10 @@ func TestCommandString(t *testing.T) {
 	}{
 		{RFC2217Command{Command: SetBaudrate, Data: []byte{0x00, 0x00, 0x09, 0x60}}, "SET-BAUDRATE: 2400"},
 		{RFC2217Command{Command: SetDatasize, Data: []byte{0x08}}, "SET-DATASIZE: 8 bits"},
-		{RFC2217Command{Command: SetParity, Data: []byte{0x00}}, "SET-PARITY: NONE"},
-		{RFC2217Command{Command: SetParity, Data: []byte{0x01}}, "SET-PARITY: ODD"},
-		{RFC2217Command{Command: SetParity, Data: []byte{0x02}}, "SET-PARITY: EVEN"},
+		{RFC2217Command{Command: SetParity, Data: []byte{0x00}}, "SET-PARITY: 0"},     // 0 = query
+		{RFC2217Command{Command: SetParity, Data: []byte{0x01}}, "SET-PARITY: NONE"}, // RFC2217: 1=NONE
+		{RFC2217Command{Command: SetParity, Data: []byte{0x02}}, "SET-PARITY: ODD"},  // RFC2217: 2=ODD
+		{RFC2217Command{Command: SetParity, Data: []byte{0x03}}, "SET-PARITY: EVEN"}, // RFC2217: 3=EVEN
 		{RFC2217Command{Command: SetStopsize, Data: []byte{0x01}}, "SET-STOPSIZE: 1"},
 		{RFC2217Command{Command: SetStopsize, Data: []byte{0x02}}, "SET-STOPSIZE: 2"},
 		{RFC2217Command{Command: SetControl, Data: []byte{0x01}}, "SET-CONTROL: 1"},
@@ -154,7 +155,7 @@ func TestIsQuery(t *testing.T) {
 
 func TestParseRFC2217Commands_RealData(t *testing.T) {
 	// Real data from log: fffa2c0100000960fff0fffa2c0208fff0fffa2c0303fff0fffa2c0401fff0fffa2c0501fff0
-	// SET-BAUDRATE: 2400, SET-DATASIZE: 8, SET-PARITY: 3 (EVEN), SET-STOPSIZE: 1, SET-CONTROL: 1
+	// SET-BAUDRATE: 2400, SET-DATASIZE: 8, SET-PARITY: 3 (RFC2217: EVEN), SET-STOPSIZE: 1, SET-CONTROL: 1
 	data, _ := hexDecode("fffa2c0100000960fff0fffa2c0208fff0fffa2c0303fff0fffa2c0401fff0fffa2c0501fff0")
 
 	t.Logf("Input data (%d bytes)", len(data))

@@ -40,8 +40,9 @@ func (h *Handler) Handle(ctx context.Context, conn net.Conn) {
 
 	reader := bufio.NewReader(conn)
 
-	// Track USR-VCOM config and modem state across command loop
+	// Track USR-VCOM config, RFC2217 presets and modem state across command loop
 	var usrvcomCfg *USRVCOMConfig
+	var rfc2217Presets []byte // RFC2217 data collected from modem AT commands
 	var modem *ModemState
 	timeout := h.cfg.InitTimeout // Start with init timeout
 
@@ -87,6 +88,9 @@ func (h *Handler) Handle(ctx context.Context, conn net.Conn) {
 				if usrvcomCfg != nil && cmd.USRVCOMCfg == nil {
 					cmd.USRVCOMCfg = usrvcomCfg
 				}
+				if len(rfc2217Presets) > 0 && len(cmd.Skipped) == 0 {
+					cmd.Skipped = rfc2217Presets
+				}
 				h.handleClient(ctx, conn, reader, cmd, remoteAddr, modem)
 				return
 			}
@@ -116,6 +120,10 @@ func (h *Handler) Handle(ctx context.Context, conn net.Conn) {
 			if modem == nil {
 				modem = NewModemState()
 				log.Printf("[conn] %s: modem emulation activated", remoteAddr)
+			}
+			// Save RFC2217 data received before this AT command (port settings)
+			if len(cmd.Skipped) > 0 {
+				rfc2217Presets = append(rfc2217Presets, cmd.Skipped...)
 			}
 			log.Printf("[modem] %s: %s", remoteAddr, cmd.Param)
 			modem.HandleCommand(conn, cmd.Param)
@@ -294,6 +302,12 @@ func (h *Handler) deviceKeepalive(conn net.Conn, deviceID string, stop <-chan st
 // Supports both USR-VCOM and RFC2217 presets before AT command
 // modem is non-nil when connection comes from GSM modem emulation (ATD<number>)
 func (h *Handler) handleClient(_ context.Context, conn net.Conn, reader *bufio.Reader, atCmd *ATCommand, remoteAddr string, modem *ModemState) {
+	// Enable TCP keepalive for fast dead connection detection
+	// idle=30s, interval=10s, count=3 => dead connection detected in ~60s
+	if err := SetTCPKeepalive(conn, 30*time.Second, 10*time.Second, 3); err != nil {
+		log.Printf("[client] %s: failed to set TCP keepalive: %v", remoteAddr, err)
+	}
+
 	// writeError sends error in appropriate format (modem or plain)
 	writeError := func() {
 		if modem != nil {

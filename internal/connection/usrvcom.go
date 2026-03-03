@@ -166,9 +166,11 @@ func (c *USRVCOMConfig) ToRFC2217Commands() []RFC2217Command {
 	})
 
 	// SET-PARITY (command 3)
+	// USR-VCOM: 0=None,1=Odd,2=Even,3=Mark,4=Space
+	// RFC2217:  1=NONE,2=ODD,3=EVEN,4=MARK,5=SPACE
 	commands = append(commands, RFC2217Command{
 		Command: SetParity,
-		Data:    []byte{c.Parity},
+		Data:    []byte{c.Parity + 1},
 	})
 
 	// SET-STOPSIZE (command 4)

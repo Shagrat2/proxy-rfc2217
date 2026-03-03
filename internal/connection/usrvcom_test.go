@@ -179,9 +179,9 @@ func TestUSRVCOMConfig_ToRFC2217Commands(t *testing.T) {
 		t.Errorf("command[1] = %d/%d, want SetDatasize/8", commands[1].Command, commands[1].Data[0])
 	}
 
-	// Check parity command
-	if commands[2].Command != SetParity || commands[2].Data[0] != 0 {
-		t.Errorf("command[2] = %d/%d, want SetParity/0", commands[2].Command, commands[2].Data[0])
+	// Check parity command (USR-VCOM 0=None → RFC2217 1=NONE)
+	if commands[2].Command != SetParity || commands[2].Data[0] != 1 {
+		t.Errorf("command[2] = %d/%d, want SetParity/1(NONE)", commands[2].Command, commands[2].Data[0])
 	}
 
 	// Check stop size command

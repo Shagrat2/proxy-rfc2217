@@ -119,10 +119,11 @@ func (c *RFC2217Command) String() string {
 		return "SET-DATASIZE: <invalid>"
 	case SetParity:
 		if len(c.Data) >= 1 {
+			// RFC2217: 1=NONE, 2=ODD, 3=EVEN, 4=MARK, 5=SPACE
 			parity := []string{"NONE", "ODD", "EVEN", "MARK", "SPACE"}
 			p := int(c.Data[0])
-			if p < len(parity) {
-				return fmt.Sprintf("SET-PARITY: %s", parity[p])
+			if p > 0 && p <= len(parity) {
+				return fmt.Sprintf("SET-PARITY: %s", parity[p-1])
 			}
 			return fmt.Sprintf("SET-PARITY: %d", p)
 		}

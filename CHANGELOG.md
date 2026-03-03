@@ -26,6 +26,32 @@
 - Завершение сессии → `NO CARRIER`
 - Сигнатура `handleClient()` расширена параметром `modem *ModemState`
 
+### Fixed — зависшие клиентские сессии после отключения клиента
+
+**Изменён:** `internal/connection/handler.go`
+- TCP keepalive не был настроен на клиентском соединении (только на устройствах)
+- При потере связи с клиентом bridge не мог обнаружить мёртвое соединение — сессия висела до дефолтного TCP keepalive ОС (~2 часа на Linux)
+- Добавлен `SetTCPKeepalive(idle=30s, interval=10s, count=3)` в `handleClient()` — мёртвое соединение обнаруживается за ~60 секунд
+
+### Fixed — RFC2217 настройки порта терялись при GSM-модем подключении
+
+**Изменён:** `internal/connection/handler.go`
+- RFC2217 данные (скорость, биты данных, чётность, стоп-биты), полученные перед модемными AT-командами (ATV0, ATE0 и т.д.), не передавались на устройство при `ATD<номер>` dial
+- Добавлена переменная `rfc2217Presets` для накопления RFC2217 данных из `cmd.Skipped` модемных команд
+- При modem dial (`ATD<номер>`) сохранённые RFC2217 presets передаются в `handleClient()` → форвардятся на устройство
+
+### Fixed — неправильное отображение parity в RFC2217 логах
+
+**Изменён:** `internal/connection/rfc2217.go`
+- `String()`: parity выводился с 0-based индексом (0=NONE, 1=ODD), а RFC2217 использует 1-based (1=NONE, 2=ODD)
+- Значение 1 отображалось как "ODD" вместо "NONE"
+
+### Fixed — USR-VCOM → RFC2217 конвертация parity
+
+**Изменён:** `internal/connection/usrvcom.go`
+- `ToRFC2217Commands()`: parity передавался без смещения — USR-VCOM 0=None отправлялся как RFC2217 0 (query), а не 1 (NONE)
+- Добавлено `+1` при конвертации: USR-VCOM 0/1/2/3/4 → RFC2217 1/2/3/4/5
+
 ### Fixed — обработка +++ escape sequence
 
 **Изменён:** `internal/connection/protocol.go`
